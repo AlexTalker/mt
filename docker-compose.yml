@@ -1,0 +1,53 @@
+version: "3"
+services:
+    redis:
+        image: redis
+        command: [ "redis-server", "--appendonly", "yes" ]
+        ports:
+          - "6379"
+        networks:
+          - backend
+        deploy:
+          replicas: 1
+          update_config:
+            delay: 10s
+          restart_policy:
+            condition: on-failure
+        volumes:
+          - "redis-data:/data"
+
+    master:
+        build: ./master
+        image: lab3/master
+        ports:
+            - "8090:80"
+        networks:
+            - frontend
+            - backend
+        depends_on:
+            - redis
+        deploy:
+            replicas: 1
+            restart_policy:
+                condition: on-failure
+
+    worker:
+        build: ./worker
+        image: lab3/worker
+        networks:
+            - backend
+        depends_on:
+            - redis
+        deploy:
+            replicas: 2
+            update_config:
+                parallelism: 2
+            restart_policy:
+                condition: on-failure
+
+networks:
+    frontend:
+    backend:
+
+volumes:
+    redis-data:
