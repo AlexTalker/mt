@@ -19,7 +19,7 @@ def _extractor(line):
     return Row(**match.groupdict())
 
 def logs():
-    logs = sc.textFile(hdfs('logs')).map(_extractor)
+    logs = sc.textFile(hdfs('nasa-logs')).map(_extractor)
     logs.cache()
     return logs
 
