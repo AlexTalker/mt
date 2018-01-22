@@ -1,5 +1,17 @@
-from utils import logs, create_frame, save_frames
-from pyspark import Row
+from pyspark import SparkContext, Row
+from pyspark.sql import SQLContext
+import re
+import sys
+
+# Sufficient pattern:
+PATTERN     = '^(?P<host>\S+) - - \[(?P<datetime>.+)\] "((?P<method>\w+)\s+)?(?P<request>.+)" (?P<code>\d+) (?P<bytes>[\d\-]+)$'
+log_pattern = re.compile(PATTERN)
+def _extractor(line):
+    match = log_pattern.match(line)
+    if match is None:
+        raise Exception(line)
+    return Row(**match.groupdict())
+
 
 # Time series
 def date_request(r):
@@ -20,10 +32,14 @@ def filter_requests(requests):
             result[k] = requests[k]
     return result
 
-dated = logs().map(date_request)\
-    .groupByKey()\
-    .mapValues(list)\
-    .mapValues(request_counter)\
-    .mapValues(filter_requests)
+logFile   = sys.argv[1]
+datesFile = sys.argv[2]
 
-save_frames(dates=create_frame(dated))
+with SparkContext() as ctx:
+    logs  = ctx.textFile(logFile).map(_extractor)
+    dated = logs.map(date_request)\
+        .groupByKey()\
+        .mapValues(list)\
+        .mapValues(request_counter)\
+        .mapValues(filter_requests)
+    SQLContext(ctx).createDataFrame(dated).write.mode('overwrite').json(datesFile)
