@@ -1,0 +1,101 @@
+version: '3'
+networks:
+    backend:
+services:
+# Hadoop
+  namenode:
+    image: bde2020/hadoop-namenode:1.1.0-hadoop2.8-java8
+    container_name: namenode
+    volumes:
+      - ./data/namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop.env
+    ports:
+      - 50070:50070
+    networks:
+        - backend
+
+  datanode:
+    image: bde2020/hadoop-datanode:1.1.0-hadoop2.8-java8
+    depends_on: 
+      - namenode
+    volumes:
+      - ./data/datanode:/hadoop/dfs/data
+    env_file:
+      - ./hadoop.env
+    ports:
+      - 50075:50075
+    networks:
+        - backend
+
+# YARN
+  resourcemanager:
+    command: [ "/entrypoint.sh", "/bin/bash", "/run.sh" ]
+    image: bde2020/hadoop-resourcemanager:1.1.0-hadoop2.8-java8
+    hostname: resourcemanager
+    container_name: resourcemanager
+    depends_on:
+      - "namenode"
+    ports:
+      - "58088:8088"
+    env_file:
+      - ./hadoop.env
+    networks:
+        - backend
+
+  nodemanager:
+    command: [ "/entrypoint.sh", "/bin/bash", "/run.sh" ]
+    image: bde2020/hadoop-nodemanager:1.1.0-hadoop2.8-java8
+    hostname: nodemanager
+    container_name: nodemanager
+    depends_on:
+      - "namenode"
+      - "resourcemanager"
+    ports:
+      - "58042:8042"
+    env_file:
+        - ./hadoop.env
+    networks:
+        - backend
+
+  historyserver:
+    command: [ "/entrypoint.sh", "/bin/bash", "/run.sh" ]
+    image: bde2020/hadoop-historyserver:1.1.0-hadoop2.8-java8
+    hostname: historyserver
+    container_name: historyserver
+    volumes:
+      - ./data/historyserver:/hadoop/yarn/timeline
+    depends_on:
+      - "namenode"
+    ports:
+      - "58188:8188"
+    env_file:
+        - ./hadoop.env
+    networks:
+        - backend
+
+# Spark
+  spark-master:
+    image: bde2020/spark-master:2.1.0-hadoop2.8-hive-java8
+    command: [ "/entrypoint.sh", "/bin/bash", "/master.sh" ]
+    container_name: spark-master
+    ports:
+      - 8080:8080
+      - 7077:7077
+    env_file:
+      - ./hadoop.env
+    networks:
+        - backend
+  spark-worker:
+    command: [ "/entrypoint.sh", "/bin/bash", "/worker.sh" ]
+    image: bde2020/spark-worker:2.1.0-hadoop2.8-hive-java8
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+    env_file:
+      - ./hadoop.env
+    networks:
+        - backend
