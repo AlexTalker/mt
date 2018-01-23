@@ -12,25 +12,9 @@ def _extractor(line):
         raise Exception(line)
     return Row(**match.groupdict())
 
-
 # Time series
 def date_request(r):
-    return Row(r.datetime[:11], "%s %s" % (r.method, r.code))
-
-def request_counter(requests):
-    result = {}
-    for r in requests:
-        if r not in result:
-            result[r] = 0
-        result[r] += 1
-    return result
-
-def filter_requests(requests):
-    result = {}
-    for k in requests:
-        if requests[k] >= 10:
-            result[k] = requests[k]
-    return result
+    return Row((r.datetime[:11], "%s %s" % (r.method, r.code)), 1)
 
 logFile   = sys.argv[1]
 datesFile = sys.argv[2]
@@ -39,7 +23,9 @@ with SparkContext() as ctx:
     logs  = ctx.textFile(logFile).map(_extractor)
     dated = logs.map(date_request)\
         .groupByKey()\
-        .mapValues(list)\
-        .mapValues(request_counter)\
-        .mapValues(filter_requests)
+        .mapValues(len)\
+        .filter(lambda v: v[1] >= 10)\
+        .map(lambda v: Row(v[0][0], (v[0][1], v[1])))\
+        .groupByKey()\
+        .mapValues(list)
     SQLContext(ctx).createDataFrame(dated).write.mode('overwrite').json(datesFile)
