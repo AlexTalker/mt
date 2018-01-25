@@ -19,5 +19,7 @@ errorsFile = sys.argv[2]
 with SparkContext() as ctx:
     # Errors
     logs  = ctx.textFile(logFile).map(_extractor)
-    error = logs.filter(lambda v: int(v.code) in range(500,600))
-    SQLContext(ctx).createDataFrame(error).write.mode('overwrite').json(errorsFile)
+    requests =logs.filter(lambda v: int(v.code) in range(500,600))\
+            .map(lambda v: ("%s %s" % (v.method, v.request), 1))\
+            .groupByKey().mapValues(len)
+    SQLContext(ctx).createDataFrame(requests).write.mode('overwrite').json(errorsFile)
